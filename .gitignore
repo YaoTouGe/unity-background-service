@@ -6,6 +6,10 @@
 # This .gitignore file should be placed at the root of your Unity project directory
 #
 # Get latest from https://github.com/github/gitignore/blob/master/Unity.gitignore
+/Unity3DProject/Library
+/Unity3DProject/Temp
+/Unity3DProject/Logs
+/Unity3DProject/.vscode
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/
