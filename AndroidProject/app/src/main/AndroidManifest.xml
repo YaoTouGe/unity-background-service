@@ -9,5 +9,8 @@
         <service android:name=".PedometerService"
             android:enabled="true"
             android:exported="true"/>
+        <service android:name=".RenderService"
+            android:enabled="true"
+            android:exported="true"/>
     </application>
 </manifest>
