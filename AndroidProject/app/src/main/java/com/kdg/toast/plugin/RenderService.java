@@ -17,6 +17,9 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 
 public class RenderService extends Service {
@@ -160,9 +163,6 @@ public class RenderService extends Service {
 
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
 
-
-
-
             m_handler = new Handler(Looper.myLooper(), new Handler.Callback()
             {
                 @Override
@@ -172,9 +172,16 @@ public class RenderService extends Service {
                         return false;
 
                     GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0]);
+                    GLES30.glColorMask(true, true, true, true);
+                    GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
+
                     // draw off screen
                     GLES30.glClearColor(1, 0, 0, 1);
-                    GLES30.glFlush();
+                    GLES30.glFinish();
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+
+                    // debug read back
+                    //ReadPixelAndCheckValue();
                     try
                     {
                         Thread.sleep(33);
@@ -186,7 +193,7 @@ public class RenderService extends Service {
 
                     // trigger next loop
                     Message.obtain(m_handler, 12345, null).sendToTarget();
-                    Log.i("[render service]", "render service tick");
+                    // Log.i("[render service]", "render service tick");
 
                     if (msg.obj != null)
                     {
@@ -201,6 +208,16 @@ public class RenderService extends Service {
                 }
             });
             Looper.loop();
+        }
+
+        private void ReadPixelAndCheckValue()
+        {
+            ByteBuffer pixelBuf = ByteBuffer.allocate(colorWidth * colorHeight * 4);
+            pixelBuf.order(ByteOrder.nativeOrder());
+
+            GLES30.glReadPixels(0, 0, colorWidth, colorWidth, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixelBuf);
+            byte[] bytes = pixelBuf.array();
+            Log.e("[render service]", "Color value(" + bytes[0] +" " + bytes[1] +" " + bytes[2] +" " + bytes[3] + ")");
         }
 
         private String getError() {
