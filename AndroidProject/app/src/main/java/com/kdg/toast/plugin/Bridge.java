@@ -11,6 +11,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.opengl.EGL14;
+import android.opengl.EGLContext;
 import android.os.Build;
 import android.os.PowerManager;
 import android.preference.PreferenceManager;
@@ -54,6 +56,23 @@ public final class Bridge extends Application {
             new Intent().setComponent(new ComponentName("com.htc.pitroad", "com.htc.pitroad.landingpage.activity.LandingPageActivity")),
             new Intent().setComponent(new ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.MainActivity"))
     };
+
+    public static void ObtainMainContext()
+    {
+        RenderService.mainContext = EGL14.eglGetCurrentContext();
+        if (RenderService.mainContext == EGL14.EGL_NO_CONTEXT)
+        {
+            Log.e("[render service]","Failed to obtain main context, disable multithreaded rendering");
+        }
+    }
+
+    public static void SetColorAttachment(int[] args/* int width, int height, int colorAttachment*/)
+    {
+        RenderService.colorWidth = args[0];
+        RenderService.colorHeight = args[1];
+        RenderService.colorAttachmentFromUnity = args[2];
+        Log.e("[render service]", "attachment width " + args[0] + " height " + args[1] + " handle " + args[2]);
+    }
 
     public static void ReceiveActivityInstance(Activity tempActivity) {
         myActivity = tempActivity;
