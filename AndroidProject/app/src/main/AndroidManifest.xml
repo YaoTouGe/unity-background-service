@@ -10,6 +10,7 @@
             android:enabled="true"
             android:exported="true"/>
         <service android:name=".RenderService"
+            android:process=":externalProcess"
             android:enabled="true"
             android:exported="true"/>
     </application>

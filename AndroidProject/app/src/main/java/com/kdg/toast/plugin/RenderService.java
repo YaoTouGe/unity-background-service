@@ -210,6 +210,9 @@ public class RenderService extends Service {
                     loc = GLES30.glGetUniformLocation(program, "fFade");
                     GLES30.glUniform1f(loc, (float)fade);
 
+                    loc = GLES30.glGetUniformLocation(program, "fForegroundColor");
+                    GLES30.glUniform4f(loc, (float)Math.random(), (float)Math.random(),(float)Math.random(),1);
+
                     // fullscreen triangle
                     float[] verts = {
                             -1.0f, -1.0f,    // vertex 0
@@ -286,6 +289,7 @@ public class RenderService extends Service {
                             "return ret;\n"+
                             "}\n"+
                             "uniform vec2 iResolution;\n"+
+                            "uniform vec4 fForegroundColor;\n"+
                             "uniform float fFade;\n"+
                             "void main()\n"+
                             "{\n"+
@@ -296,7 +300,7 @@ public class RenderService extends Service {
                             "float edgeWidth = 10.0/max(iResolution.x, iResolution.y);\n"+
                             "float smoothdist = smoothstep(0.0, edgeWidth, clamp(logo(uv), 0.0, 1.0));\n"+
                             "// the green is #3bb779\n"+
-                            "gl_FragColor = mix(vec4(1.0), vec4(0.2314, 0.7176, 0.4745, 1.0), smoothdist)*fFade;\n"+
+                            "gl_FragColor = mix(fForegroundColor, vec4(0.2314, 0.7176, 0.4745, 1.0), smoothdist)*fFade;\n"+
                             "}\n";
 
             // compile the shaders and link into a program
