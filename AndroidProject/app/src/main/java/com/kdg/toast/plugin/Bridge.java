@@ -57,13 +57,11 @@ public final class Bridge extends Application {
             new Intent().setComponent(new ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.MainActivity"))
     };
 
+    private static native long GetCurrentContext();
+
     public static void ObtainMainContext()
     {
-        RenderService.mainContext = EGL14.eglGetCurrentContext();
-        if (RenderService.mainContext == EGL14.EGL_NO_CONTEXT)
-        {
-            Log.e("[render service]","Failed to obtain main context, disable multithreaded rendering");
-        }
+        RenderService.mainContextHandle = GetCurrentContext();
     }
 
     public static void SetColorAttachment(int[] args/* int width, int height, int colorAttachment*/)
@@ -117,7 +115,17 @@ public final class Bridge extends Application {
 
     private static void start(){
         //myActivity.startForegroundService(new Intent(myActivity, PedometerService.class));
-        myActivity.startService(new Intent(myActivity, RenderService.class));
+
+        // pass the shared resource to the other process using parcelable
+        Intent newIntent = new Intent(myActivity, RenderService.class);
+        GLResources resource = new GLResources(RenderService.colorAttachmentFromUnity,
+                RenderService.mainContextHandle,
+                RenderService.colorWidth,
+                RenderService.colorHeight);
+        Log.i("[render service]", "send params tex handle " + RenderService.colorAttachmentFromUnity + " ctx handle " + RenderService.mainContextHandle + " extents " + RenderService.colorWidth + " " + RenderService.colorHeight);
+        newIntent.putExtra("resource", resource);
+        myActivity.startService(newIntent);
+
     }
     public static void StopService(){
         //Intent serviceIntent = new Intent(myActivity, PedometerService.class);
@@ -160,6 +168,7 @@ public final class Bridge extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        System.loadLibrary("EGLNative");
         Bridge.appContext=getApplicationContext();
 
     }
