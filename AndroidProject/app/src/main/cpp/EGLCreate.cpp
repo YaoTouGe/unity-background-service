@@ -189,7 +189,7 @@ Java_com_kdg_toast_plugin_Bridge_CreateHardwareBuffer(
     return AHardwareBuffer_toHardwareBuffer(env, buffer);
 }
 
-static unsigned int ConvertHardwareBufferToGLTexture(JNIEnv* env, jobject hardwareBuffer)
+static unsigned int ConvertHardwareBufferToGLTexture(JNIEnv* env, jobject hardwareBuffer, GLenum textureTarget)
 {
     AHardwareBuffer *buffer = AHardwareBuffer_fromHardwareBuffer(env, hardwareBuffer);
     AHardwareBuffer_acquire(buffer);
@@ -205,8 +205,8 @@ static unsigned int ConvertHardwareBufferToGLTexture(JNIEnv* env, jobject hardwa
 
     GLuint retTex;
     glGenTextures(1, &retTex);
-    glBindTexture(GL_TEXTURE_2D, retTex);
-    glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, img);
+    glBindTexture(textureTarget, retTex);
+    glEGLImageTargetTexture2DOES(textureTarget, img);
 
     return retTex;
 }
@@ -217,7 +217,7 @@ Java_com_kdg_toast_plugin_Bridge_HardwareBufferToGLTexture(
         jclass /**/,
         jobject hardwareBuffer)
 {
-    return ConvertHardwareBufferToGLTexture(env, hardwareBuffer);
+    return ConvertHardwareBufferToGLTexture(env, hardwareBuffer, GL_TEXTURE_EXTERNAL_OES);
 }
 
 extern "C" JNIEXPORT int JNICALL
@@ -226,5 +226,5 @@ Java_com_kdg_toast_plugin_RenderService_HardwareBufferToGLTexture(
         jclass /**/,
         jobject hardwareBuffer)
 {
-    return ConvertHardwareBufferToGLTexture(env, hardwareBuffer);
+    return ConvertHardwareBufferToGLTexture(env, hardwareBuffer, GL_TEXTURE_2D);
 }
