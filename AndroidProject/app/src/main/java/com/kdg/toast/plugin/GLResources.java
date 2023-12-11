@@ -1,34 +1,29 @@
 package com.kdg.toast.plugin;
 
-import android.opengl.EGLContext;
+import android.hardware.HardwareBuffer;
 import android.os.Parcel;
 import android.os.Parcelable;
 
 public class GLResources implements Parcelable {
-    private int colorTexture;
-    private long mainContext;
+    private HardwareBuffer colorBuffer;
     private int width;
     private int height;
 
-    public GLResources(int colorTex, long ctxHandle, int width, int height)
+    public GLResources(HardwareBuffer hwBuffer, int width, int height)
     {
-        colorTexture = colorTex;
-        mainContext = ctxHandle;
+        colorBuffer = hwBuffer;
         this.width = width;
         this.height = height;
     }
 
-    public int GetColorTex() {return colorTexture;}
-    public long GetMainCtx() {
-        return mainContext;
-    }
+    public HardwareBuffer GetColorBuffer() {return colorBuffer;}
 
     public int GetWidth() {return width;}
     public int GetHeight() {return height;}
 
     protected GLResources(Parcel in) {
-        colorTexture = in.readInt();
-        mainContext = in.readLong();
+        colorBuffer = in.readParcelable(HardwareBuffer.class.getClassLoader());
+        // colorBuffer = (HardwareBuffer) in.readValue(HardwareBuffer.class.getClassLoader());
         width = in.readInt();
         height = in.readInt();
     }
@@ -52,9 +47,10 @@ public class GLResources implements Parcelable {
 
     @Override
     public void writeToParcel(Parcel dest, int flags) {
-        dest.writeInt(colorTexture);
-        dest.writeLong(mainContext);
+        dest.writeParcelable(colorBuffer, 0);
+        //dest.writeValue(colorBuffer);
         dest.writeInt(width);
         dest.writeInt(height);
+        dest.marshall();
     }
 }

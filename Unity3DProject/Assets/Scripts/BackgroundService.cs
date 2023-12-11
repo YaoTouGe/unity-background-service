@@ -1,4 +1,5 @@
-﻿using TMPro;
+﻿using System;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -19,11 +20,11 @@ public class BackgroundService : MonoBehaviour
     private const string CustomClassReceiveActivityInstanceMethod = "ReceiveActivityInstance";
     private const string CustomClassStartServiceMethod = "StartService";
     private const string CustomClassStopServiceMethod = "StopService";
+    private const string Trigger = "TriggerRenderService";
     private const string CustomClassGetCurrentStepsMethod = "GetCurrentSteps";
     private const string CustomClassSyncDataMethod = "SyncData";
-    private const string ObtainMainContext = "ObtainMainContext";
-    private const string SetColorAttachment = "SetColorAttachment";
-
+    private const string GetTextureNativeHandle = "GetTextureNativeHandle";
+    private const string InitHardwareBuffer = "InitHardwareBuffer";
 
     private void Awake()
     {
@@ -34,12 +35,11 @@ public class BackgroundService : MonoBehaviour
 
     void Start()
     {
-        customClass.CallStatic(ObtainMainContext);
-        colorAttachment = new Texture2D(1000, 1000, TextureFormat.RGBA32, false);
-        customClass.CallStatic(SetColorAttachment, new int[] {colorAttachment.width, colorAttachment.height, (int)colorAttachment.GetNativeTexturePtr()});
-        Debug.Log("before raw image");
+        customClass.CallStatic(InitHardwareBuffer, new int[] {1000, 1000});
+        int nativeHandle = customClass.CallStatic<int>(GetTextureNativeHandle);
+        Debug.Log($"get native texture {nativeHandle}");
+        colorAttachment = Texture2D.CreateExternalTexture(1000, 1000, TextureFormat.RGBA32, false, false, (IntPtr)(nativeHandle));
         img.texture = colorAttachment;
-        Debug.Log("Start!!!!!!!!!!!");
     }
 
 
@@ -61,6 +61,11 @@ public class BackgroundService : MonoBehaviour
     public void StopService()
     {
         customClass.CallStatic(CustomClassStopServiceMethod);
+    }
+
+    public void TriggerThread()
+    {
+        customClass.CallStatic(Trigger);
     }
 
     public void GetCurrentSteps()

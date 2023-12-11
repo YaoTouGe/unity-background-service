@@ -1,7 +1,15 @@
+#define EGL_EGLEXT_PROTOTYPES
+#define GL_GLEXT_PROTOTYPES
+
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <GLES/gl.h>
+#include <GLES/glext.h>
 #include <jni.h>
 #include <string>
 #include <android/log.h>
+#include <android/hardware_buffer.h>
+#include <android/hardware_buffer_jni.h>
 
 #define LOGI(...) \
   ((void)__android_log_print(ANDROID_LOG_INFO, "[render service]", __VA_ARGS__))
@@ -90,8 +98,7 @@ const char* getError() {
 extern "C" JNIEXPORT int JNICALL
 Java_com_kdg_toast_plugin_RenderService_InitEGLContext(
         JNIEnv* env,
-        jobject /* this */,
-        jlong mainContext) {
+        jobject /* this */) {
     display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     int major, minor;
     bool initialized = eglInitialize(display, &major, &minor);
@@ -109,11 +116,12 @@ Java_com_kdg_toast_plugin_RenderService_InitEGLContext(
     }
 
     int ctxAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    context = eglCreateContext(display, config, (EGLContext)mainContext, ctxAttribs);
+    // Can use shared context between multiple processes, should try hardware buffer
+    context = eglCreateContext(display, config, EGL_NO_CONTEXT, ctxAttribs);
 
     if (context == EGL_NO_CONTEXT)
     {
-        LOGE("eglCreateContext failed! %s %lld", getError(), (long long)mainContext);
+        LOGE("eglCreateContext failed! %s", getError());
         return false;
     }
 
@@ -156,42 +164,67 @@ Java_com_kdg_toast_plugin_RenderService_DestroyEGLContext(
     eglDestroySurface(display, pbuffer);
 }
 
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_kdg_toast_plugin_Bridge_GetCurrentContext(
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_kdg_toast_plugin_Bridge_CreateHardwareBuffer(
         JNIEnv* env,
-        jclass /* this */)
+        jclass /**/,
+        int width,
+        int height
+        )
 {
-    EGLContext curCtx = eglGetCurrentContext();
-    EGLDisplay dsp = eglGetCurrentDisplay();
-    EGLConfig cfg;
-    int numCfg;
-    eglGetConfigs(dsp, &cfg, 1, &numCfg);
-    /*
-        EGL_RED_SIZE,
-        8,
-        EGL_GREEN_SIZE,
-        8,
-        EGL_BLUE_SIZE,
-        8,
-        EGL_ALPHA_SIZE,
-        8,
-        EGL_SURFACE_TYPE,
-        EGL_WINDOW_BIT,
-        EGL_COLOR_BUFFER_TYPE,
-        EGL_RGB_BUFFER,
-        EGL_RENDERABLE_TYPE,
-        EGL_OPENGL_ES3_BIT,
-        EGL_NONE
-     */
-    int redSize, greenSize, blueSize, alphaSize, sfType, bufType, renderableType;
-    eglGetConfigAttrib(dsp, cfg, EGL_RED_SIZE, &redSize);
-    eglGetConfigAttrib(dsp, cfg, EGL_GREEN_SIZE, &greenSize);
-    eglGetConfigAttrib(dsp, cfg, EGL_BLUE_SIZE, &blueSize);
-    eglGetConfigAttrib(dsp, cfg, EGL_ALPHA_SIZE, &alphaSize);
-    eglGetConfigAttrib(dsp, cfg, EGL_SURFACE_TYPE, &sfType);
-    eglGetConfigAttrib(dsp, cfg, EGL_COLOR_BUFFER_TYPE, &bufType);
-    eglGetConfigAttrib(dsp, cfg, EGL_RENDERABLE_TYPE, &renderableType);
+    AHardwareBuffer *buffer = nullptr;
+    AHardwareBuffer_Desc desc = {
+            static_cast<uint32_t>(width),
+            static_cast<uint32_t>(height),
+            1,
+            AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
+            AHARDWAREBUFFER_USAGE_CPU_READ_NEVER | AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER |
+            AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE | AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT,
+            0,
+            0,
+            0};
+    int errCode = AHardwareBuffer_allocate(&desc, &buffer);
+    if (errCode != 0)
+        LOGE("Failed to create HardwareBuffer errcode :%d", errCode);
+    return AHardwareBuffer_toHardwareBuffer(env, buffer);
+}
 
-    LOGE("GetCurrentContext %x %x %x %x %x %x %x", redSize, greenSize, blueSize, alphaSize, sfType, bufType, renderableType);
-    return (long long)curCtx;
+static unsigned int ConvertHardwareBufferToGLTexture(JNIEnv* env, jobject hardwareBuffer)
+{
+    AHardwareBuffer *buffer = AHardwareBuffer_fromHardwareBuffer(env, hardwareBuffer);
+    AHardwareBuffer_acquire(buffer);
+    EGLClientBuffer clientBuffer = eglGetNativeClientBufferANDROID(buffer);
+
+    if (!clientBuffer)
+        LOGE("failed to get client buffer from hardware buffer!");
+    EGLDisplay dsp = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    EGLint eglImageAttributes[] = {EGL_IMAGE_PRESERVED_KHR, EGL_TRUE, EGL_NONE};
+    EGLImage img = eglCreateImageKHR(dsp, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_ANDROID, clientBuffer, eglImageAttributes);
+    if (img == EGL_NO_IMAGE_KHR)
+        LOGE("failed to create image from client buffer! %s", getError());
+
+    GLuint retTex;
+    glGenTextures(1, &retTex);
+    glBindTexture(GL_TEXTURE_2D, retTex);
+    glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, img);
+
+    return retTex;
+}
+
+extern "C" JNIEXPORT int JNICALL
+Java_com_kdg_toast_plugin_Bridge_HardwareBufferToGLTexture(
+        JNIEnv* env,
+        jclass /**/,
+        jobject hardwareBuffer)
+{
+    return ConvertHardwareBufferToGLTexture(env, hardwareBuffer);
+}
+
+extern "C" JNIEXPORT int JNICALL
+Java_com_kdg_toast_plugin_RenderService_HardwareBufferToGLTexture(
+        JNIEnv* env,
+        jclass /**/,
+        jobject hardwareBuffer)
+{
+    return ConvertHardwareBufferToGLTexture(env, hardwareBuffer);
 }

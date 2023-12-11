@@ -8,13 +8,18 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.hardware.HardwareBuffer;
 import android.net.Uri;
 import android.opengl.EGL14;
 import android.opengl.EGLContext;
 import android.os.Build;
+import android.os.IBinder;
+import android.os.Parcelable;
 import android.os.PowerManager;
+import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.util.Log;
@@ -35,11 +40,15 @@ public final class Bridge extends Application {
     static int initialSteps;
     static Activity myActivity;
     static Context appContext;
+    static ServiceConnection aidlConn;
+    static RenderServiceResources aidlInterface;
     Date currentDate;
     static final String STEPS="steps";
     static final String SUMMARY_STEPS="summarySteps";
     static final String DATE="currentDate";
     static final String INIT_DATE="initialDate";
+
+    static HardwareBuffer colorBuffer = null;
     public static final Intent[] POWERMANAGER_INTENTS = new Intent[]{
             new Intent().setComponent(new ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
             new Intent().setComponent(new ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")),
@@ -57,21 +66,32 @@ public final class Bridge extends Application {
             new Intent().setComponent(new ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.MainActivity"))
     };
 
-    private static native long GetCurrentContext();
+    private static native HardwareBuffer CreateHardwareBuffer(int width, int height);
+    private static native int HardwareBufferToGLTexture(HardwareBuffer buffer);
 
-    public static void ObtainMainContext()
+    public static void InitHardwareBuffer(int[] args)
     {
-        RenderService.mainContextHandle = GetCurrentContext();
+        if (colorBuffer == null)
+        {
+            colorBuffer = CreateHardwareBuffer(args[0], args[1]);
+            RenderService.colorWidth = args[0];
+            RenderService.colorHeight = args[1];
+        }
     }
-
-    public static void SetColorAttachment(int[] args/* int width, int height, int colorAttachment*/)
+    public static int GetTextureNativeHandle()
     {
-        RenderService.colorWidth = args[0];
-        RenderService.colorHeight = args[1];
-        RenderService.colorAttachmentFromUnity = args[2];
-        Log.e("[render service]", "attachment width " + args[0] + " height " + args[1] + " handle " + args[2]);
+        return HardwareBufferToGLTexture(colorBuffer);
     }
+    public static void TriggerRenderService() {
+        try{
+            aidlInterface.TriggerThread();
+        }
+        catch (RemoteException e)
+        {
+            Log.e("[render service]", "failed to call trigger thread");
+        }
 
+    }
     public static void ReceiveActivityInstance(Activity tempActivity) {
         myActivity = tempActivity;
         String[] perms= new String[1];
@@ -115,20 +135,57 @@ public final class Bridge extends Application {
 
     private static void start(){
         //myActivity.startForegroundService(new Intent(myActivity, PedometerService.class));
-
         // pass the shared resource to the other process using parcelable
         Intent newIntent = new Intent(myActivity, RenderService.class);
-        GLResources resource = new GLResources(RenderService.colorAttachmentFromUnity,
-                RenderService.mainContextHandle,
-                RenderService.colorWidth,
-                RenderService.colorHeight);
-        Log.i("[render service]", "send params tex handle " + RenderService.colorAttachmentFromUnity + " ctx handle " + RenderService.mainContextHandle + " extents " + RenderService.colorWidth + " " + RenderService.colorHeight);
-        newIntent.putExtra("resource", resource);
-        myActivity.startService(newIntent);
+        if (aidlConn == null)
+        {
+            aidlConn = new ServiceConnection() {
+                @Override
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    Log.d("[render service]", "onServiceConnected");
+                    aidlInterface = RenderServiceResources.Stub.asInterface(service);
+                    try
+                    {
+                        Log.i("[render service]", "send params hwbuffer " + colorBuffer.toString() +  " extents " + RenderService.colorWidth + " " + RenderService.colorHeight);
+                        aidlInterface.SetRenderHardwareBuffer(colorBuffer, RenderService.colorWidth, RenderService.colorHeight);
+                        aidlInterface.SetReadyToStart(true);
+                    }
+                    catch (RemoteException e)
+                    {
+                        Log.e("[render service]", "failed to call aidl");
+                    }
+                }
 
+                @Override
+                public void onServiceDisconnected(ComponentName name) {
+                    Log.d("[render service]", "onServiceDisconnected");
+                }
+            };
+        }
+        /*GLResources resource = new GLResources(
+                colorBuffer,
+                RenderService.colorWidth,
+                RenderService.colorHeight);*/
+        myActivity.bindService(newIntent, aidlConn, BIND_AUTO_CREATE | BIND_IMPORTANT);
+        myActivity.startService(newIntent);
     }
     public static void StopService(){
         //Intent serviceIntent = new Intent(myActivity, PedometerService.class);
+        if (aidlInterface != null)
+        {
+            try
+            {
+                aidlInterface.SetReadyToStart(false);
+            }
+            catch (RemoteException e)
+            {
+                Log.e("[render service]", "failed to call aidl");
+            }
+        }
+        aidlInterface = null;
+        myActivity.unbindService(aidlConn);
+        aidlConn = null;
+
         Intent serviceIntent = new Intent(myActivity, RenderService.class);
         myActivity.stopService(serviceIntent);
 

@@ -10,8 +10,10 @@
 /Unity3DProject/Temp
 /Unity3DProject/Logs
 /Unity3DProject/.vscode
+/Unity3DProject/obj
 /AndroidProject/.idea
 /AndroidProject/app/.cxx
+
 /[Ll]ibrary/
 /[Tt]emp/
 /[Oo]bj/

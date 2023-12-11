@@ -2,6 +2,7 @@ package com.kdg.toast.plugin;
 
 import android.app.Service;
 import android.content.Intent;
+import android.hardware.HardwareBuffer;
 import android.opengl.EGLConfig;
 import android.opengl.EGLContext;
 import android.opengl.EGLDisplay;
@@ -24,13 +25,37 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.Date;
 
-public class RenderService extends Service {
-    public static long mainContextHandle = 0;
-    public static int colorAttachmentFromUnity = 0;
+public class RenderService extends Service{
+    public static HardwareBuffer colorBuffer = null;
+    public static int colorTextureId;
     public static int colorWidth;
     public static int colorHeight;
+    public boolean readyToStart = false;
     public IBinder onBind(Intent intent) {
-        return null;
+        return new RenderServiceResources.Stub() {
+            @Override
+            public void TriggerThread()
+            {
+                m_Thread.Trigger();
+            }
+
+            @Override
+            public void SetRenderHardwareBuffer(HardwareBuffer hwb, int width, int height)
+            {
+                colorBuffer = hwb;
+                colorWidth = width;
+                colorHeight = height;
+                Log.i("[render service]", "receive hwbuffer " + colorBuffer + " extents " + colorWidth + " " + colorHeight);
+            }
+
+            @Override
+            public void SetReadyToStart(boolean ready)
+            {
+                readyToStart = ready;
+
+                Log.e("[render service]", "SetReadyToStart");
+            }
+        };
     }
 
     private class RenderThread extends Thread
@@ -44,7 +69,10 @@ public class RenderService extends Service {
         public void Trigger()
         {
             if (IsValid())
+            {
+                Log.e("[render service]", "Trigger thread");
                 Message.obtain(m_handler, 12345, null).sendToTarget();
+            }
         }
 
         public void Quit()
@@ -56,25 +84,39 @@ public class RenderService extends Service {
 
         @Override
         public void run() {
+            try
+            {
+                while (!readyToStart)
+                {
+                    Log.e("[render service]", "wait for ready");
+                    Thread.sleep(100);
+                }
+            }
+            catch (InterruptedException e)
+            {
+                Log.e("[render service]", "interrupted");
+            }
+
             Looper.prepare();
 
-            if (InitEGLContext(mainContextHandle) == 0)
+            if (InitEGLContext() == 0)
             {
-                Toast.makeText(RenderService.this, "Egl init failed!", Toast.LENGTH_SHORT).show();
+                Log.e("[render service]", "Egl init failed!");
                 Looper.myLooper().quit();
                 return;
             }
             else
             {
-                Toast.makeText(RenderService.this, "Egl init successful!", Toast.LENGTH_SHORT).show();
+                Log.e("[render service]", "Egl init success!");
             }
+            colorTextureId = HardwareBufferToGLTexture(colorBuffer);
 
             // Create FBO from unity color texture
             GLES30.glGenFramebuffers(1, fbo, 0);
             GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0]);
 
             //GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, colorAttachmentFromUnity);
-            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, colorAttachmentFromUnity,0);
+            GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, colorTextureId,0);
 
             GLES30.glGenRenderbuffers(1, rbo, 0);
             GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, rbo[0]);
@@ -96,7 +138,7 @@ public class RenderService extends Service {
                 {
                     if (msg.what != 12345)
                         return false;
-
+                    //Log.e("[render service]", "render tick");
                     GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0]);
                     GLES30.glColorMask(true, true, true, true);
                     GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT | GLES30.GL_DEPTH_BUFFER_BIT);
@@ -150,10 +192,10 @@ public class RenderService extends Service {
                     GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
 
                     GLES30.glFinish();
-                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
 
                     // debug read back
-                    //ReadPixelAndCheckValue();
+                    ReadPixelAndCheckValue();
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
                     try
                     {
                         Thread.sleep(33);
@@ -169,7 +211,7 @@ public class RenderService extends Service {
 
                     if (msg.obj != null)
                     {
-                        Toast.makeText(RenderService.this, "Egl destroy!", Toast.LENGTH_SHORT).show();
+                        Log.e("[render service]", "Egl destroy!");
                         // Destroy everything before quit
                         DestroyEGLContext();
                         Looper.myLooper().quit();
@@ -177,7 +219,11 @@ public class RenderService extends Service {
                     return true;
                 }
             });
+            Log.e("[render service]", "before Looper.loop()");
+
+            m_Thread.Trigger();
             Looper.loop();
+            Log.e("[render service]", "after Looper.loop()");
         }
 
         private void InitShaders()
@@ -256,6 +302,7 @@ public class RenderService extends Service {
                 String log = GLES30.glGetProgramInfoLog(program);
                 Log.e("[render service]", "Program error: " + log);
             }
+            Log.e("[render service]", "InitShaders success!");
         }
 
         private void ReadPixelAndCheckValue()
@@ -275,39 +322,25 @@ public class RenderService extends Service {
     }
 
     RenderThread m_Thread;
+    private static native int HardwareBufferToGLTexture(HardwareBuffer buffer);
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Toast.makeText(this, "Render service running", Toast.LENGTH_SHORT).show();
+        Log.e("[render service]", "Render service running");
 
-        GLResources resources = intent.getParcelableExtra("resource");
-        mainContextHandle = resources.GetMainCtx();
+        /*GLResources resources = intent.getParcelableExtra("resource");
+        colorBuffer = resources.GetColorBuffer();
         colorWidth = resources.GetWidth();
-        colorHeight = resources.GetHeight();
-        colorAttachmentFromUnity = resources.GetColorTex();
-
-        Log.i("[render service]", "receive params tex handle " + RenderService.colorAttachmentFromUnity + " ctx handle " + RenderService.mainContextHandle + " extents " + RenderService.colorWidth + " " + RenderService.colorHeight);
+        colorHeight = resources.GetHeight();*/
 
         m_Thread = new RenderThread();
         m_Thread.start();
-
-        try {
-            for (int i = 0; i < 10; ++i) {
-                Thread.sleep(10);
-                if (m_Thread.IsValid())
-                    break;
-            }
-        }catch (InterruptedException e)
-        {
-            e.printStackTrace();;
-        }
-
-        m_Thread.Trigger();
+        Log.e("[render service]", "thread started");
 
         return START_NOT_STICKY;
     }
 
-    private native int InitEGLContext(long mainContextHandle);
+    private native int InitEGLContext();
     private native void DestroyEGLContext();
 
     @Override
