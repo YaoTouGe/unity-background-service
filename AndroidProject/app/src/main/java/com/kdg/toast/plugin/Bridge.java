@@ -2,6 +2,7 @@ package com.kdg.toast.plugin;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.app.Application;
 import android.content.ComponentName;
@@ -160,9 +161,29 @@ public final class Bridge extends Application {
                 colorBuffer,
                 RenderService.colorWidth,
                 RenderService.colorHeight);*/
-        myActivity.bindService(newIntent, aidlConn, BIND_AUTO_CREATE | BIND_IMPORTANT);
-        myActivity.startService(newIntent);
+
+        if (isMyServiceRunning(RenderService.class))
+        {
+            myActivity.bindService(newIntent, aidlConn, BIND_AUTO_CREATE | BIND_IMPORTANT);
+            Log.e("[render service]", "RenderService already running!");
+        }
+        else
+        {
+            myActivity.bindService(newIntent, aidlConn, BIND_AUTO_CREATE | BIND_IMPORTANT);
+            myActivity.startService(newIntent);
+        }
     }
+
+    private static boolean isMyServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) myActivity.getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void StopService(){
         //Intent serviceIntent = new Intent(myActivity, PedometerService.class);
         aidlInterface = null;
