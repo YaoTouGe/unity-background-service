@@ -165,7 +165,7 @@ Java_com_kdg_toast_plugin_RenderService_DestroyEGLContext(
 }
 
 extern "C" JNIEXPORT jobject JNICALL
-Java_com_kdg_toast_plugin_Bridge_CreateHardwareBuffer(
+Java_com_kdg_toast_plugin_RenderService_CreateHardwareBuffer(
         JNIEnv* env,
         jclass /**/,
         int width,

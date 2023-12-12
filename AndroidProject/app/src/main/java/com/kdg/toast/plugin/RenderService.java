@@ -26,35 +26,12 @@ import java.nio.IntBuffer;
 import java.util.Date;
 
 public class RenderService extends Service{
-    public static HardwareBuffer colorBuffer = null;
-    public static int colorTextureId;
-    public static int colorWidth;
-    public static int colorHeight;
-    public boolean readyToStart = false;
+    public HardwareBuffer colorBuffer = null;
+    public int colorTextureId;
+    public int colorWidth;
+    public int colorHeight;
     public IBinder onBind(Intent intent) {
         return new RenderServiceResources.Stub() {
-            @Override
-            public void TriggerThread()
-            {
-                m_Thread.Trigger();
-            }
-
-            @Override
-            public void SetRenderHardwareBuffer(HardwareBuffer hwb, int width, int height)
-            {
-                colorBuffer = hwb;
-                colorWidth = width;
-                colorHeight = height;
-                Log.i("[render service]", "receive hwbuffer " + colorBuffer + " extents " + colorWidth + " " + colorHeight);
-            }
-
-            @Override
-            public void SetReadyToStart(boolean ready)
-            {
-                readyToStart = ready;
-
-                Log.e("[render service]", "SetReadyToStart");
-            }
         };
     }
 
@@ -84,19 +61,6 @@ public class RenderService extends Service{
 
         @Override
         public void run() {
-            try
-            {
-                while (!readyToStart)
-                {
-                    Log.e("[render service]", "wait for ready");
-                    Thread.sleep(100);
-                }
-            }
-            catch (InterruptedException e)
-            {
-                Log.e("[render service]", "interrupted");
-            }
-
             Looper.prepare();
 
             if (InitEGLContext() == 0)
@@ -109,6 +73,7 @@ public class RenderService extends Service{
             {
                 Log.e("[render service]", "Egl init success!");
             }
+            colorBuffer = CreateHardwareBuffer(colorWidth, colorHeight);
             colorTextureId = HardwareBufferToGLTexture(colorBuffer);
 
             // Create FBO from unity color texture
@@ -310,7 +275,7 @@ public class RenderService extends Service{
             ByteBuffer pixelBuf = ByteBuffer.allocate(colorWidth * colorHeight * 4);
             pixelBuf.order(ByteOrder.nativeOrder());
 
-            GLES30.glReadPixels(0, 0, colorWidth, colorWidth, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixelBuf);
+            GLES30.glReadPixels(0, 0, colorWidth, colorHeight, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, pixelBuf);
             byte[] bytes = pixelBuf.array();
             Log.e("[render service]", "Color value(" + bytes[0] +" " + bytes[1] +" " + bytes[2] +" " + bytes[3] + ")");
         }
@@ -324,15 +289,14 @@ public class RenderService extends Service{
     RenderThread m_Thread;
     private static native int HardwareBufferToGLTexture(HardwareBuffer buffer);
 
+    private static native HardwareBuffer CreateHardwareBuffer(int width, int height);
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.e("[render service]", "Render service running");
 
-        /*GLResources resources = intent.getParcelableExtra("resource");
-        colorBuffer = resources.GetColorBuffer();
-        colorWidth = resources.GetWidth();
-        colorHeight = resources.GetHeight();*/
-
+        colorWidth = 1000;
+        colorHeight = 1000;
         m_Thread = new RenderThread();
         m_Thread.start();
         Log.e("[render service]", "thread started");

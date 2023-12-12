@@ -49,6 +49,8 @@ public final class Bridge extends Application {
     static final String INIT_DATE="initialDate";
 
     static HardwareBuffer colorBuffer = null;
+    static int colorWidth;
+    static int colorHeight;
     public static final Intent[] POWERMANAGER_INTENTS = new Intent[]{
             new Intent().setComponent(new ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
             new Intent().setComponent(new ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")),
@@ -66,31 +68,11 @@ public final class Bridge extends Application {
             new Intent().setComponent(new ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.MainActivity"))
     };
 
-    private static native HardwareBuffer CreateHardwareBuffer(int width, int height);
     private static native int HardwareBufferToGLTexture(HardwareBuffer buffer);
 
-    public static void InitHardwareBuffer(int[] args)
-    {
-        if (colorBuffer == null)
-        {
-            colorBuffer = CreateHardwareBuffer(args[0], args[1]);
-            RenderService.colorWidth = args[0];
-            RenderService.colorHeight = args[1];
-        }
-    }
     public static int GetTextureNativeHandle()
     {
         return HardwareBufferToGLTexture(colorBuffer);
-    }
-    public static void TriggerRenderService() {
-        try{
-            aidlInterface.TriggerThread();
-        }
-        catch (RemoteException e)
-        {
-            Log.e("[render service]", "failed to call trigger thread");
-        }
-
     }
     public static void ReceiveActivityInstance(Activity tempActivity) {
         myActivity = tempActivity;
@@ -144,16 +126,7 @@ public final class Bridge extends Application {
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     Log.d("[render service]", "onServiceConnected");
                     aidlInterface = RenderServiceResources.Stub.asInterface(service);
-                    try
-                    {
-                        Log.i("[render service]", "send params hwbuffer " + colorBuffer.toString() +  " extents " + RenderService.colorWidth + " " + RenderService.colorHeight);
-                        aidlInterface.SetRenderHardwareBuffer(colorBuffer, RenderService.colorWidth, RenderService.colorHeight);
-                        aidlInterface.SetReadyToStart(true);
-                    }
-                    catch (RemoteException e)
-                    {
-                        Log.e("[render service]", "failed to call aidl");
-                    }
+
                 }
 
                 @Override
@@ -171,17 +144,6 @@ public final class Bridge extends Application {
     }
     public static void StopService(){
         //Intent serviceIntent = new Intent(myActivity, PedometerService.class);
-        if (aidlInterface != null)
-        {
-            try
-            {
-                aidlInterface.SetReadyToStart(false);
-            }
-            catch (RemoteException e)
-            {
-                Log.e("[render service]", "failed to call aidl");
-            }
-        }
         aidlInterface = null;
         myActivity.unbindService(aidlConn);
         aidlConn = null;
