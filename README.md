@@ -1,67 +1,13 @@
+This project is forked from [unity-background-service](https://github.com/nintendaii/unity-background-service). The original doc is [here](/old-doc.md).
 
-## What is Unity Background Service?
-Unity Background Service is a project that shows how to create an Android service for Unity application working on background. 
-Usually Android service (especially in Unity apps) shuts down when we kill the app. It is impossible to make the service working fully on background. The only solution is to let the
-service work on foreground as a notification and then the users are able to hide that notification if they wants to.
-Specifically, this project shows the creation of a step counting service that works on background. 
-## How to use?
-![doc_2021-03-02_12-38-25](https://user-images.githubusercontent.com/44233090/109638719-04edda00-7b57-11eb-9929-abd2e5665b42.gif)
+In order to test renderdoc capture background render service, I modify this project to draw the renderdoc logo with shader in a background service. The result is shared with unity player process with hardware buffer, it's not as easy as I thought:)
 
-## How it works?
----
-### [Unity](https://github.com/nintendaii/unity-background-service/tree/master/Unity3DProject)
-The main scene is located in Assets/Scenes. To see the example code go to [BackgroundService](https://github.com/nintendaii/unity-background-service/blob/master/Unity3DProject/Assets/Scripts/BackgroundService.cs) class. Explanation of the methods:
-  1. On Awake the `SendActivityReference` method is called. It creates the Unity Android class and Unity activity. Then it sends the current activity to the plugin (the .aar file should be located at Assets/Plugins/Android)
+Firstly I test sharing texture with shared EGLContext, I need to use native cpp to do some EGLContext stuff. But it turns out only contexts in the same process is allow to be shared. My render service is a standalone process, and even I made it the same process with unity player, renderdoc can capture the drawcalls in service thread, since all the gles functions are injected when unity player launches.
 
-```c#
-void SendActivityReference(string packageName)
-    {
-        unityClass = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-        unityActivity = unityClass.GetStatic<AndroidJavaObject>("currentActivity");
-        customClass = new AndroidJavaClass(packageName);
-        customClass.CallStatic("receiveActivityInstance", unityActivity);
-    }
-``` 
-  2. `StartService` and `StopService` methods respectively starts and stops the background service as well as `GetCurrentSteps` method simply gets the walked steps from plugin.
-  3. `SyncData` method returns a string data that holds 3 variables separated with # symbol:
-   - date of `StartService` method invocation
-   - date of `SyncData` method invocation
-   - count of steps walked during this period
-```c# 
-public void SyncData()
-    {
-        string data;
-        data = customClass.CallStatic<string>("SyncData");
-        
-        string[] parsedData = data.Split('#');
-        string dateOfSync=parsedData[0] + " - " + parsedData[1];
-        syncedDateText.text = dateOfSync;
-        int receivedSteps = Int32.Parse(parsedData[2]);
-        int prefsSteps = PlayerPrefs.GetInt(_prlayerPrefsTotalSteps,0);
-        int prefsStepsToSave = prefsSteps + receivedSteps;
-        PlayerPrefs.SetInt(_prlayerPrefsTotalSteps,prefsStepsToSave);
-        totalStepsText.text = prefsStepsToSave.ToString();
-        
-        GetCurrentSteps();
-    }
-  ```
+After searching I find that the only way to share texture between processes is hardware buffer, so I create a hardware buffer and pass to the service process through Parcelable, but again after testing it doesn't work, hardware buffer can marshel correctly when using Parcelable.writeValue.
 
- ---
- ### [Android](https://github.com/nintendaii/unity-background-service/tree/master/AndroidProject)
- The entry point of the Android application is the [`Bridge`](https://github.com/nintendaii/unity-background-service/blob/master/AndroidProject/app/src/main/java/com/kdg/toast/plugin/Bridge.java) class. Explanation of the methods:
- 1. The `receiveActivityInstance` method is called when the `SendActivityReference` from Unity executes. It takes the Unity activity to know where to start the background service in the future. Also it checks if the permission for activity recognition is granted and asks for the permission if it is not (this logic is implemented for Android API 28 and above).
-```java
-public static void receiveActivityInstance(Activity tempActivity) {
-        myActivity = tempActivity;
-        String[] perms= new String[1];
-        perms[0]=Manifest.permission.ACTIVITY_RECOGNITION;
-        if (ContextCompat.checkSelfPermission(myActivity, Manifest.permission.ACTIVITY_RECOGNITION)
-                != PackageManager.PERMISSION_GRANTED) {
-            Log.i("PEDOMETER", "Permision isnt granted!");
-            ActivityCompat.requestPermissions(Bridge.myActivity,
-                    perms,
-                    1);
-        }
-    }
-```
-2. `GetCurrentSteps` is called when the `GetCurrentSteps` is called from Unity.
+I search again and also asked gpt many times, it seems that AIDL can solve this problem and there are some examples that use AIDL to share HardwareBuffer between processes. I thought I find the correct way but when create external texture and sample it in Unity, nothing shows up.
+
+After final search and read the code of Vuplex WebView, when using a hardware buffer converted texture in unity, I should use the GL_TEXTURE_EXTERNAL_OES, and also Sample it with this [extension](https://registry.khronos.org/OpenGL/extensions/OES/OES_EGL_image_external.txt).
+
+Finally the renderdoc logo shows up in unity player, now I can move on how to made renderdoc launch and inject a service and capture frames! Good luck with me!
