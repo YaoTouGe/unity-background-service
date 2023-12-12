@@ -72,6 +72,11 @@ public final class Bridge extends Application {
 
     public static int GetTextureNativeHandle()
     {
+        if (colorBuffer == null)
+        {
+            Log.e("[render service]", "hardware buffer is null!");
+            return -1;
+        }
         return HardwareBufferToGLTexture(colorBuffer);
     }
     public static void ReceiveActivityInstance(Activity tempActivity) {
@@ -115,6 +120,16 @@ public final class Bridge extends Application {
         }
     }
 
+    private static HardwareBufferCallback callback = new HardwareBufferCallback.Stub() {
+        @Override
+        public void ObtainHardwareBuffer(HardwareBuffer hwb, int width, int height) throws RemoteException {
+            colorBuffer = hwb;
+            colorWidth = width;
+            colorHeight = height;
+            Log.e("[render service]", "Receive call back hardware buffer to client " + colorBuffer + " size " + colorWidth + " " + colorHeight);
+        }
+    };
+
     private static void start(){
         //myActivity.startForegroundService(new Intent(myActivity, PedometerService.class));
         // pass the shared resource to the other process using parcelable
@@ -126,7 +141,13 @@ public final class Bridge extends Application {
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     Log.d("[render service]", "onServiceConnected");
                     aidlInterface = RenderServiceResources.Stub.asInterface(service);
-
+                    try {
+                        aidlInterface.RegisterHardwareBufferCallback(callback);
+                    }
+                    catch (RemoteException e)
+                    {
+                        e.printStackTrace();
+                    }
                 }
 
                 @Override

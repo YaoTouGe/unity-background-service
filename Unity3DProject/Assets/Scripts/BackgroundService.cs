@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -24,7 +25,6 @@ public class BackgroundService : MonoBehaviour
     private const string CustomClassGetCurrentStepsMethod = "GetCurrentSteps";
     private const string CustomClassSyncDataMethod = "SyncData";
     private const string GetTextureNativeHandle = "GetTextureNativeHandle";
-    private const string InitHardwareBuffer = "InitHardwareBuffer";
 
     private void Awake()
     {
@@ -35,11 +35,7 @@ public class BackgroundService : MonoBehaviour
 
     void Start()
     {
-        customClass.CallStatic(InitHardwareBuffer, new int[] {1000, 1000});
-        int nativeHandle = customClass.CallStatic<int>(GetTextureNativeHandle);
-        Debug.Log($"get native texture {nativeHandle}");
-        colorAttachment = Texture2D.CreateExternalTexture(1000, 1000, TextureFormat.RGBA32, false, false, (IntPtr)(nativeHandle));
-        img.texture = colorAttachment;
+        
     }
 
 
@@ -52,10 +48,24 @@ public class BackgroundService : MonoBehaviour
 
     }
 
+    private IEnumerator ObtainHwb()
+    {
+        int nativeHandle = customClass.CallStatic<int>(GetTextureNativeHandle);
+        while (nativeHandle == -1)
+        {
+            yield return null;
+            nativeHandle = customClass.CallStatic<int>(GetTextureNativeHandle);
+        }
+        Debug.Log($"get native texture {nativeHandle}");
+        colorAttachment = Texture2D.CreateExternalTexture(1000, 1000, TextureFormat.RGBA32, false, false, (IntPtr)(nativeHandle));
+        img.texture = colorAttachment;
+        yield break;
+    }
+
     public void StartService()
     {
         customClass.CallStatic(CustomClassStartServiceMethod);
-        GetCurrentSteps();
+        StartCoroutine(ObtainHwb());
     }
 
     public void StopService()

@@ -13,6 +13,8 @@ import android.os.IBinder;
 import android.opengl.EGL14;
 import android.os.Looper;
 import android.os.Message;
+import android.os.RemoteCallbackList;
+import android.os.RemoteException;
 import android.util.Log;
 import android.widget.Toast;
 
@@ -30,8 +32,21 @@ public class RenderService extends Service{
     public int colorTextureId;
     public int colorWidth;
     public int colorHeight;
+    private final RemoteCallbackList<HardwareBufferCallback> mCallbacks = new RemoteCallbackList<HardwareBufferCallback>();
     public IBinder onBind(Intent intent) {
         return new RenderServiceResources.Stub() {
+            @Override
+            public void RegisterHardwareBufferCallback(HardwareBufferCallback callback)
+            {
+                mCallbacks.register(callback);
+                m_Thread.needsCallback[0] = true;
+            }
+
+            @Override
+            public void UnregisterHardwareBufferCallback(HardwareBufferCallback callback)
+            {
+                mCallbacks.unregister(callback);
+            }
         };
     }
 
@@ -43,6 +58,9 @@ public class RenderService extends Service{
         int program;
 
         private Handler m_handler;
+
+        public boolean[] needsCallback = new boolean[] {false};
+
         public void Trigger()
         {
             if (IsValid())
@@ -103,6 +121,24 @@ public class RenderService extends Service{
                 {
                     if (msg.what != 12345)
                         return false;
+                    if (needsCallback[0])
+                    {
+                        Log.e("[render service]", "Send call back hardware buffer to client " + colorBuffer + " size " + colorWidth + " " + colorHeight);
+                        int cbCount = mCallbacks.beginBroadcast();
+                        for (int i = 0; i < cbCount; ++i)
+                        {
+                            try
+                            {
+                                mCallbacks.getBroadcastItem(i).ObtainHardwareBuffer(colorBuffer, colorWidth, colorHeight);
+                            }
+                            catch (RemoteException e)
+                            {
+                                e.printStackTrace();
+                            }
+                        }
+                        mCallbacks.finishBroadcast();
+                        needsCallback[0] = false;
+                    }
                     //Log.e("[render service]", "render tick");
                     GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0]);
                     GLES30.glColorMask(true, true, true, true);
@@ -317,5 +353,6 @@ public class RenderService extends Service{
     public void onDestroy() {
         super.onDestroy();
         m_Thread.Quit();
+        mCallbacks.kill();
     }
 }
