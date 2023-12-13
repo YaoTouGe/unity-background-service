@@ -76,7 +76,7 @@ public final class Bridge extends Application {
     {
         if (colorBuffer == null)
         {
-            Log.e("[render service]", "hardware buffer is null!");
+            //Log.e("[render service]", "hardware buffer is null!");
             return -1;
         }
         return HardwareBufferToGLTexture(colorBuffer);
@@ -136,6 +136,7 @@ public final class Bridge extends Application {
         //myActivity.startForegroundService(new Intent(myActivity, PedometerService.class));
         // pass the shared resource to the other process using parcelable
         Intent newIntent = new Intent(myActivity, RenderService.class);
+        newIntent.putExtra(Intent.EXTRA_TEXT, "start");
         if (aidlConn == null)
         {
             aidlConn = new ServiceConnection() {
@@ -193,7 +194,8 @@ public final class Bridge extends Application {
         aidlConn = null;
 
         Intent serviceIntent = new Intent(myActivity, RenderService.class);
-        myActivity.stopService(serviceIntent);
+        serviceIntent.putExtra(Intent.EXTRA_TEXT, "stop");
+        myActivity.startForegroundService(serviceIntent);
 
     }
     public static int GetCurrentSteps(){

@@ -329,21 +329,30 @@ public class RenderService extends Service{
 
     }
 
-    RenderThread m_Thread;
+    RenderThread m_Thread = new RenderThread();;
     private static native int HardwareBufferToGLTexture(HardwareBuffer buffer);
 
     private static native HardwareBuffer CreateHardwareBuffer(int width, int height);
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        createNotificationChannel();
-        startNotification();
+        Log.e("[render service]", "extra is " + intent.getStringExtra(Intent.EXTRA_TEXT));
+        if (intent.getStringExtra(Intent.EXTRA_TEXT).equals("stop"))
+        {
+            Log.e("[render service]", "service stopped");
+            stopForeground(true);
+            stopSelfResult(startId);
+        }
+        else
+        {
+            createNotificationChannel();
+            startNotification();
 
-        colorWidth = 1000;
-        colorHeight = 1000;
-        m_Thread = new RenderThread();
-        m_Thread.start();
-        Log.e("[render service]", "thread started");
+            colorWidth = 1000;
+            colorHeight = 1000;
+            m_Thread.start();
+            Log.e("[render service]", "service started");
+        }
 
         return START_NOT_STICKY;
     }
