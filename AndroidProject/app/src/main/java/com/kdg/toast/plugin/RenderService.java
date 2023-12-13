@@ -1,5 +1,9 @@
 package com.kdg.toast.plugin;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.hardware.HardwareBuffer;
@@ -8,6 +12,7 @@ import android.opengl.EGLContext;
 import android.opengl.EGLDisplay;
 import android.opengl.EGLSurface;
 import android.opengl.GLES30;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.opengl.EGL14;
@@ -19,6 +24,8 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -329,7 +336,8 @@ public class RenderService extends Service{
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.e("[render service]", "Render service running");
+        createNotificationChannel();
+        startNotification();
 
         colorWidth = 1000;
         colorHeight = 1000;
@@ -355,4 +363,27 @@ public class RenderService extends Service{
         m_Thread.Quit();
         mCallbacks.kill();
     }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            final NotificationChannel notificationChannel = new NotificationChannel(
+                    "PedometerLib",
+                    "Service Channel",
+                    NotificationManager.IMPORTANCE_DEFAULT
+            );
+            final NotificationManagerCompat notificationManager = NotificationManagerCompat.from(this);
+            notificationManager.createNotificationChannel(notificationChannel);
+        }
+    }
+
+    private void startNotification(){
+        String input = "rendering in background...";
+        Notification notification = new NotificationCompat.Builder(this, "PedometerLib")
+                .setContentTitle("Background Render Service")
+                .setContentText(input)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .build();
+        startForeground(112, notification);
+    }
+
 }

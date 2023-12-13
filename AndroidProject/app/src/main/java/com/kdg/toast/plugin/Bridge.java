@@ -171,7 +171,8 @@ public final class Bridge extends Application {
         else
         {
             myActivity.bindService(newIntent, aidlConn, BIND_AUTO_CREATE | BIND_IMPORTANT);
-            myActivity.startService(newIntent);
+            myActivity.startForegroundService(newIntent);
+            //myActivity.startService(newIntent);
         }
     }
 
