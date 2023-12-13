@@ -24,6 +24,7 @@ import android.os.RemoteException;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.util.Calendar;
 import java.util.Date;
@@ -165,7 +166,7 @@ public final class Bridge extends Application {
         if (isMyServiceRunning(RenderService.class))
         {
             myActivity.bindService(newIntent, aidlConn, BIND_AUTO_CREATE | BIND_IMPORTANT);
-            Log.e("[render service]", "RenderService already running!");
+            Toast.makeText(myActivity, "RenderService already running!", Toast.LENGTH_SHORT).show();
         }
         else
         {
